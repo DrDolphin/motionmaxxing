@@ -304,4 +304,4 @@ Early release, so a glow-up in progress. It works end to end on the author's mac
 
 ## License
 
-Made by Tejas · open source under [Apache-2.0](LICENSE). Bundled third-party components (GSAP, three.js, opentype.js, Inter) keep their own licenses: see [NOTICE](NOTICE). Brand names in the showcase belong to their owners.
+Open source under [Apache-2.0](LICENSE). Bundled third-party components (GSAP, three.js, opentype.js, Inter) keep their own licenses: see [NOTICE](NOTICE). Brand names in the showcase belong to their owners.
