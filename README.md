@@ -186,6 +186,7 @@ A gate that fails is fixed, not argued. Scripts print the numbers and the agent 
 | **G3** end card short | End hold at most 1.4 s; the final shot at most 25% of the film | `look.py` | do not overstay |
 | **G4** one hero per frame | Two panels only if one has twice the area of the other, or the camera moves between them | by eye on the contact sheet | one main character |
 | **G5** no page chrome | No corner labels, tracked-caps labels, counters, timecodes, header or footer bars, kicker over a headline, left headline block beside right-side media, progress bars, letter-typed headlines, or vibe-coded UI cards | `lint.mjs` | take the lanyard off |
+| **G6** voice is heard | Every voice-over line sits over the music and SFX in the speech band, and speech recognition hears the finished film as well as the dry line | `hear.py` | say it with your chest |
 
 <p align="center">
   <img src="docs/media/gates.png" alt="The page-chrome lint catching a synthetic frame: a tracked-caps brand label, a counter, a timecode, a progress bar and a kicker over a left-aligned headline all fail gate G5." width="100%">
@@ -231,7 +232,7 @@ In Claude Code, run `/motionmaxxing` or just ask in plain language. The skill tr
 | `film/final.mp4` | The film, with sound when a key is set |
 | `film/index.html` | The editable source: plain HTML plus the `Motion` runtime, reproducible frame by frame |
 | `film/STORYBOARD.md` | The plan: page, brand inventory, the chosen idea and why, per-act world, the beat table with what each beat buys |
-| `film/NOTE.md` | The honest account: the idea, what is real and what is illustrative or generated, the G0-G5 numbers from the scripts, what you would still improve. The agent never certifies the film as good |
+| `film/NOTE.md` | The honest account: the idea, what is real and what is illustrative or generated, the G0-G6 numbers from the scripts, what you would still improve. The agent never certifies the film as good |
 
 ## Toolbox
 
@@ -246,10 +247,11 @@ Every script prints `--help`. Zero dependencies unless noted. Full flags in [`re
 | `scripts/imagegen.py` | Generated surface plates, with a guard that refuses text, logos, UI and people |
 | `scripts/voice.py` | ElevenLabs voice-over (`eleven_v4_turbo`, with audio tags), sound effects, music (`music_v2_5`), music fitting, and word alignment |
 | `scripts/sync.mjs` | Word timings to frames, for cutting picture to the voice |
-| `scripts/mix.py` | Voice, music and hits to one -14 LUFS / -1 dBTP mix, with predictable ducking |
+| `scripts/mix.py` | Voice, music and hits to one -14 LUFS / -1 dBTP mix, with predictable ducking and per-bus stems for `hear.py` |
 | `scripts/render.mjs` | Deterministic frame-by-frame render through Chrome and ffmpeg; stills, shutter blur, grain |
 | `scripts/look.py` | Contact sheet, cuts, end hold, audio audit and gates G0, G2, G3 |
 | `scripts/lint.mjs` | The page-chrome lint, gate G5 |
+| `scripts/hear.py` | Is every voice-over line heard in the final film: voice vs bed from the mix stems, plus faster-whisper on the film vs the dry line, gate G6 |
 | `scripts/blind_review.py` | A randomised, blind A/B page for choosing between versions |
 
 ### Runtime highlights

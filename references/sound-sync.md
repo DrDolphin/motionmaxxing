@@ -118,7 +118,7 @@ The default VO model is `eleven_v4_turbo` (`voice.py vo --model eleven_v4` for t
 6. **SFX on picture events**: list each frame-exact event (cursor press, hard cut, whip, logo hit, counter end), generate or choose the sound, place it by the event frame (section 7).
 7. **Music** last: it must fit the cut grid and the voice (section 6).
 8. **Mix**: `python3 scripts/mix.py --duration <s> --vo audio/vo.mp3@0 --music audio/music.mp3 --events events.json --duck --out audio/mix.wav` (VO + music + SFX, -14 LUFS). SFX go in either as repeatable `--sfx clip@time:gain_dB` or as `--events` JSON `[{"t":2.1,"sfx":"path","gain":-8}]` (your own SFX placement list, not render.mjs's `<out>.events.json`); `--vo` is `clip@start_seconds` and may be repeated (one per line clip, section 4a). `--duck` now means a fixed 9 dB, see 4a.
-9. **Check**: scrub the render at each word-onset frame and each hit frame; fix by moving picture, not by retiming audio, unless the VO itself is wrong. Then `python3 scripts/look.py final.mp4` (cuts, end hold, loudness; 4a).
+9. **Check**: scrub the render at each word-onset frame and each hit frame; fix by moving picture, not by retiming audio, unless the VO itself is wrong. Then `python3 scripts/look.py final.mp4` (cuts, end hold, loudness; 4a) and `python3 scripts/hear.py final.mp4` (gate G6: every line heard over the bed, and the ASR hears the film as well as the dry line). A G6 FAIL is fixed in the mix (lower or move the SFX under the line, `--duck-sfx`, deeper `--duck-db`, `--vo-gain`), never in the picture.
 
 Frame table the picture is built from:
 
@@ -247,6 +247,7 @@ All **practice, not from the corpus** except where the brief's tools set the tar
 | SFX | per the table in section 7, relative to the VO peak; none louder than the VO peak except the one strongest hit |
 | Silence | leave 0.2-0.3 s of reduced sound before the strongest hit; silence is a valid choice (section 6a), never an accident |
 | Coverage | the score covers the whole cut: no silent tail, no digital silence over the last seconds (`look.py` audio audit: integrated LUFS, true peak, silent tail, hit count; quote the numbers in NOTE.md) |
+| Words survive | every VO line at least 0 dB over music + SFX in the speech band across the line (8+ dB sits clearly on top), no 300 ms with the bed 10 dB over a word, and the ASR hears the delivered film as well as the dry clip: gate G6, `hear.py`. A sound that is part of the picture's idea (the wash under "let the tide settle") still goes under the words: duck it, or move its swell into the gap after the line |
 
 **WHEN** the mix is ready **DO** loudness-check the final file and scrub the render once at each hit frame, once at each word-onset frame **because** a sync fault is invisible in a continuous playback.
 
@@ -282,6 +283,8 @@ All **practice, not from the corpus** except where the brief's tools set the tar
 | Tick once per typed character, or once per counter value | One quiet texture across the span; a tick per word or per 3rd-4th value |
 | Give every event its own bespoke sound | 3-5 SFX kinds reused as a system |
 | Ride the music at full level under the voice | Duck 8-10 dB under speech; thin sound around the strongest hit |
+| Duck the music and leave a big SFX bed (wash, riser, crowd) at full level under a line | Duck the bed too (`--duck-sfx`) or swell it in the gap; check with `hear.py` |
+| Call the mix good because LUFS and true peak pass | Loudness says nothing about whether the words survive; G6 measures it per line |
 | Stop with an error when the key is missing | Pick a named fallback (silent draft, local voice, text-only rhythm), keep beats.json, report it |
 | Let a fade of music end the film | Resolve on a grid unit; let a living mark linger with almost no sound |
 | Put a hit on every cut and every word, on a printed BPM | One to three hand-picked hits on the moments that matter; sections shaped, not looped (section 6a) |

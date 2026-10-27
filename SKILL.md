@@ -39,6 +39,7 @@ A film containing any of these is not finished. These are what this user rejecte
 10. **A web-footer ending:** logo + tagline + button + URL, or any end card held past 1.4 s.
 11. **Self-certification:** no `NOTE.md`, gates claimed without script numbers, "justified" fails.
 12. **A film you did not look at.** A 15 s black render was once certified "VERIFIED / CLEAN".
+13. **A voice you did not hear.** A tide wash 25 dB over "let the tide settle the rest" once shipped with clean LUFS and peak numbers; the transcript read "Then you can go to bed". Loudness gates do not check whether the words survive the mix: G6 does.
 
 ## Craft laws (measured on the 53 moments; conditions in the references)
 
@@ -57,7 +58,7 @@ A film containing any of these is not finished. These are what this user rejecte
 
 ## Gates (computed on the render; a fail is fixed, never argued)
 
-Scripts print the numbers; you quote them in `NOTE.md`. Three gates are computed by a script (G0, G2, G3 by `look.py`; G5 by `lint.mjs`); G1 and G4 have no script: judge them on `look/sheet.jpg` and the stills and say so in `NOTE.md`; never estimate a number. Everything outside the gates is a "notice it" question. Same definitions in `references/slop.md` Part 2 and `references/tools.md`.
+Scripts print the numbers; you quote them in `NOTE.md`. Five gates are computed by a script (G0, G2, G3 by `look.py`; G5 by `lint.mjs`; G6 by `hear.py`); G1 and G4 have no script: judge them on `look/sheet.jpg` and the stills and say so in `NOTE.md`; never estimate a number. Everything outside the gates is a "notice it" question. Same definitions in `references/slop.md` Part 2 and `references/tools.md`.
 
 | Gate | Pass | Computed by |
 |---|---|---|
@@ -67,6 +68,7 @@ Scripts print the numbers; you quote them in `NOTE.md`. Three gates are computed
 | G3 end card short | end hold (picture unchanged at the end) <= 1.4 s, so a resolved hold is 0.6-1.4 s (under 0.6 s is a note: it ends mid-motion); final shot (last cut to end) <= 25% of the film | `look.py` (`--hold-warn 1.4`) |
 | G4 one hero per frame | two panels only if one is >= 2x the other's area or the camera moves between them | by eye on the sheet (no script number) |
 | G5 no page chrome | no corner/edge labels (C1), tracked-caps labels (C2), counters (C3), timecodes/metadata (C4), header/footer bars (C6), kicker above headline (C7), left headline block at x < 0.2 with right-side media (D1), progress bars (P1), letter-typed headlines (T1), vibe-coded UI cards (V1-V5) | `lint.mjs` (`GATE G5: FAIL` = exit 1) |
+| G6 voice is heard | every VO line sits over the bed (speech band, line >= 0 dB, no 300 ms with the bed 10 dB over a word) and the ASR hears the delivered film as well as the dry line; the stems match the film | `hear.py` (`GATE G6`; `--strict` exits 3) |
 
 ## How you work
 
@@ -119,14 +121,16 @@ python3 "$SKILL/scripts/voice.py" music --prompt "<style, bpm>" --ms <film ms> -
 python3 "$SKILL/scripts/voice.py" music-fit --in film/audio/music.mp3 --out film/audio/music-fit.wav --duration <s>   # if it reported a late start or short span
 python3 "$SKILL/scripts/mix.py" --duration <s> --vo film/audio/vo/line01.wav@<t - lead> --music film/audio/music-fit.wav --events film/events.json --out film/audio/mix.wav
 ```
-Silence before the hit; pull the music down while the viewer reads; 1-3 hand-placed hero hits. `look.py` audits the mix (LUFS, true peak, silent tail, hits against picture).
+Silence before the hit; pull the music down while the viewer reads; 1-3 hand-placed hero hits. A bed sound that runs under a line (a wash, room tone, a riser) gets `--duck-sfx` or a gain that keeps it under the voice; hits go in the gaps between lines. `mix.py` also writes `film/audio/mix.stems/` (voice, music and SFX buses + `manifest.json`) for G6; never pass `--no-stems` on the final mix. `look.py` audits the mix (LUFS, true peak, silent tail, hits against picture).
 
 ### 9. Final and deliver
 ```bash
 node "$SKILL/scripts/render.mjs" film/index.html film/final.mp4 --audio film/audio/mix.wav [--shutter 180 --subframes 8] [--grain 0.03]
 python3 "$SKILL/scripts/look.py" film/final.mp4 --out film/look-final --expect <planned s> --expect-audio
+python3 "$SKILL/scripts/hear.py" film/final.mp4 --out film/look-final/hear.json      # G6, only when the film has VO
 ```
-`--shutter` and `--grain` are for smooth-clock films only (`world.md`). Deliver `final.mp4`, the editable `index.html` and **`NOTE.md` (mandatory)**: the one idea and why; each beat and what it buys; what is real (captured UI and copy) and what is illustrative or generated; the G0-G5 numbers quoted from `look.py` and `lint.mjs`; the one-sentence frame descriptions; what you would still improve. Describe what you checked; never certify the film as good. When there are versions to choose between, offer `python3 "$SKILL/scripts/blind_review.py" film/review --round "Versions" a.mp4 b.mp4` (opens `film/review/index.html`); append the user's reaction to `taste/verdicts.md`.
+**The sound is not done until G6 passes.** `hear.py` grades every VO line twice: the voice against the music and SFX stems in the speech band (exact, from `mix.py`'s stems, scaled to what is in the film), and faster-whisper on the delivered film against the dry line clip, so a misheard line is pinned on the mix or on the voice itself. On a FAIL it names the line, the time, and the SFX placements under it: fix in `mix.py` (lower or move that SFX, `--duck-sfx`, deeper `--duck-db`, or `--vo-gain`), re-mix, re-render, re-run, until it passes (two or three passes is normal). Never fix it by retiming picture. A WARN where the dry clip also transcribes wrong is the voice or an unusual word: read the line, regenerate it if the voice is unclear, accept it if it is a brand name, and say which in `NOTE.md`. First run: `pip install faster-whisper numpy` (the `small` model, about 480 MB, downloads once); with no ASR it still grades the masking and prints `ASR: NOT CHECKED`, which you report as unchecked, not passed.
+`--shutter` and `--grain` are for smooth-clock films only (`world.md`). Deliver `final.mp4`, the editable `index.html` and **`NOTE.md` (mandatory)**: the one idea and why; each beat and what it buys; what is real (captured UI and copy) and what is illustrative or generated; the G0-G6 numbers quoted from `look.py`, `lint.mjs` and `hear.py` (per line: voice over bed, worst 300 ms, what the ASR heard); the one-sentence frame descriptions; what you would still improve. Describe what you checked; never certify the film as good. When there are versions to choose between, offer `python3 "$SKILL/scripts/blind_review.py" film/review --round "Versions" a.mp4 b.mp4` (opens `film/review/index.html`); append the user's reaction to `taste/verdicts.md`.
 
 ## Defaults when nothing is specified (starting values, not targets)
 - **Format:** 1920x1080, 30 fps, with sound. Length follows the idea: most launch films run 15-30 s; a single moment 3-7 s.
@@ -157,7 +161,7 @@ python3 "$SKILL/scripts/look.py" film/final.mp4 --out film/look-final --expect <
 | `templates/film.html` | the starting film (copy it to `film/index.html`) |
 | `examples/` | `demo/` (full beat set), `3d-hero/` (hero3d film), `phone/` (native-ui lock screen), `selftest/` (runtime regression page: must print PASS) |
 | `library/moments.jsonl` | 716 rule-only precedent rows read by `scripts/precedent.py` |
-| `scripts/` | `providers.sh`, `brand.mjs`, `fetch_logo.mjs`, `voice.py`, `sync.mjs`, `render.mjs`, `look.py`, `lint.mjs`, `mix.py`, `imagegen.py`, `blind_review.py`, `precedent.py` |
+| `scripts/` | `providers.sh`, `brand.mjs`, `fetch_logo.mjs`, `voice.py`, `sync.mjs`, `render.mjs`, `look.py`, `lint.mjs`, `mix.py`, `hear.py`, `imagegen.py`, `blind_review.py`, `precedent.py` |
 
 ## Source and ethics
 The study corpus (other companies' published films, kept outside this skill) is private study material and is not part of it: learn mechanics and timing, never ship their brand assets, copy, layouts or frames as the user's. Principles here are in our own words; the strips are original images of invented brands. Generated images are for a missing surface only, never text, logos, UI or people shown as real, and are declared in `NOTE.md`. 3D is built in the film's own renderer (hero3d), not exported from other tools. When this skill and a HyperFrames house style disagree (decoratives, ghost text, hairlines, eyebrow or progress patterns, bold headings), this skill wins.

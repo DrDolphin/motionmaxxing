@@ -10,6 +10,7 @@
 | 4 | `imagegen.py` | generated SURFACE plates (never text/logo/UI/people) |
 | 5, 8 | `voice.py`, `sync.mjs`, `mix.py` | voice, word timings to frames (5); SFX, music, final mix (8) |
 | 6-7, 9 | `render.mjs`, `look.py`, `lint.mjs` | render, inspect (G0 G2 G3 + audio), page-chrome lint (G5); final render with sound (9) |
+| 9 | `hear.py` | is every VO line heard in the delivered film (G6): voice vs bed from the mix stems, ASR on the film vs the dry line |
 | 9 | `blind_review.py` | blind A/B page for the user |
 
 ## Gates and who computes them
@@ -22,6 +23,7 @@ Same definitions as SKILL.md and `slop.md` Part 2.
 | G3 end card short | `look.py` | end hold (picture unchanged at the end) <= 1.4 s, i.e. a resolved hold of 0.6-1.4 s; under 0.6 s is a NOTE (ends mid-motion); final shot (last cut to end) <= 25 % of the film |
 | G4 one hero per frame | by eye on the sheet (no script number) | two panels only if one is >= 2x the other's area or the camera moves between them |
 | G5 no page chrome | `lint.mjs` (`GATE G5: PASS/FAIL`, exit 1 on FAIL) | C1-C4, C6, C7, P1, V1, V2, V5 FAIL; D1 FAILs with media/sub-line/kicker beside it (WARN alone); T1 FAILs when letters grow (a caret alone is WARN); C5, V3, V4 are WARN |
+| G6 voice is heard | `hear.py film/final.mp4` (`GATE G6: PASS/FAIL`; `--strict` exits 3) | films with VO; needs `mix.py` stems; the ASR half needs `pip install faster-whisper` |
 `look.py` writes G0, G2, G3 to `look/gates.json` and prints them in its GATES block as `G0 render exists`, `G2 no empty frame`, `G3 end card hold, CTA share` (G1, G4 and G5 are named there as not computed by it); `lint.mjs` prints `GATE G5: PASS|FAIL`. Quote the numbers in `NOTE.md`. A PASS is not good taste; a lint is a lead, not a verdict.
 
 ## providers.sh
@@ -42,7 +44,10 @@ Same definitions as SKILL.md and `slop.md` Part 2.
 ## voice.py, sync.mjs, mix.py
 - `voice.py` subcommands: `voices`, `vo --script script.txt --out audio/vo.mp3` (writes `vo.words.json`, `vo.lines.json`; `--no-refine` skips the audio refinement), `vo-local` (macOS `say`, estimated timings), `refine`, `split --vo ... --lines ... --out audio/vo` (per-line clips + `lines.index.json`), `sfx --prompt ... --out ...` or `--batch sfx.json`, `sfx-norm`, `music --prompt ... --ms N --out ... [--dry-run]`, `music-check`, `music-fit --duration N [--loop-bars]`. Word and line times are refined against the audio. Reads the ElevenLabs key (exit 3 without one); `--dry-run` (music) shows the request.
 - `node sync.mjs audio/vo.words.json --fps 30` -> `beats.json` / `beats.js`: word -> frame table, on-screen onset frames (2 f before the word), clip table for `mix.py`.
-- `python3 mix.py --duration 16 --vo clip@t ... --music m.wav --sfx f@t:gain --duck --out mix.wav` -> -14 LUFS / -1 dBTP stereo 48 kHz. Duck is predictable (`--duck-db 9`).
+- `python3 mix.py --duration 16 --vo clip@t ... --music m.wav --sfx f@t:gain --duck --out mix.wav` -> -14 LUFS / -1 dBTP stereo 48 kHz. Duck is predictable (`--duck-db 9`); `--duck-sfx` applies the same envelope to the SFX bus (for beds under a line). Also writes `<out>.stems/` (`vo.wav`, `music.wav`, `sfx.wav`: each bus alone with the mix's gains and ducks, before loudness, so they sum exactly to the pre-loudness mix) and `manifest.json` (every placement) for `hear.py`; `--no-stems` skips them. Warns when loudnorm had to compress (dynamic mode) because the peaks were too high for the target loudness.
+
+## hear.py
+`python3 "$SKILL/scripts/hear.py" film/final.mp4 [--stems film/audio/mix.stems] [--lines film/audio/vo/lines.index.json] [--model small] [--no-asr] [--strict]` -> per VO line: speech span, **voice over bed** (power-averaged speech-band 300-4000 Hz level of the voice stem minus music + SFX stems over the frames the line speaks), the **worst 300 ms** and what is under it (music and SFX level vs the voice, the SFX placements that overlap), the script, what faster-whisper heard in the **delivered film** and in the **dry line clip**, and WER for both; then `GATE G6` and `<film>.hear.json`. The stems are fitted to the film's audio first (per-stem gain by least squares): the bed is scaled to what the film carries (a dynamic loudnorm squashes SFX peaks 6-8 dB), and a fit under R2 0.88 means the stems are from another mix (`STALE STEMS`, G6 cannot pass). FAIL: line under 0 dB, a 300 ms window with the bed 10 dB over the voice, or the mix misheard (WER > 0.2) where the dry clip is heard (and 0.2 worse). WARN: under +8 dB for the line or under 0 dB for 300 ms, or the dry clip itself misheard (an unusual word or an unclear voice: listen and judge). Needs ffmpeg and numpy; the ASR half needs `faster-whisper` (CPU, int8; `small` is about 15 s for a 25 s film). It passes the ASR samples, not a path, so the PyAV version does not matter, and never gives the ASR the script as a prompt.
 
 ## render.mjs
 `node "$SKILL/scripts/render.mjs" film/index.html film/final.mp4 --audio audio/mix.wav` (any `__seek` / `__timelines` / gsap page; `--fps`, `--from/--to`, `--scale 0.5` for drafts, `--still 0.5,2,4` for PNG stills). Writes `final.mp4.events.json` from `window.__events` (`look.py` uses it for exact cuts).

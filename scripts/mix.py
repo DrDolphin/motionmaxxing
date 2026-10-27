@@ -16,7 +16,11 @@ Usage:
                                         finishes at the speech onset, the ramp-out (--duck-release, default 300 ms) starts at the
                                         speech offset, so the music returns in the gaps. --duck-db alone also switches ducking on.
                                         The log reports the measured music RMS in VO regions vs gaps (should differ by ~--duck-db +-2).
+      [--duck-sfx]                      also duck the SFX bus with the same envelope (for beds like a wash or room tone that run
+                                        under a line; hero hits belong in the gaps instead)
       [--lufs -14] [--tp -1] [--no-normalize]
+      [--no-stems]                      by default the voice, music and SFX buses are also written, post gain and duck and
+                                        pre loudness, to <out>.stems/ (vo.wav, music.wav, sfx.wav + manifest.json) for hear.py
 
 Music is trimmed to --duration with a fade-OUT over the last 1.0 s only (no fade-in).
 Loudness: two-pass loudnorm to -14 LUFS integrated / -1 dBTP (linear), then a measurement of the result is printed.
@@ -180,6 +184,8 @@ def main():
     ap.add_argument("--duck-db", type=float, default=None)
     ap.add_argument("--duck-attack", type=float, default=0.08)
     ap.add_argument("--duck-release", type=float, default=0.30)
+    ap.add_argument("--duck-sfx", action="store_true")
+    ap.add_argument("--no-stems", action="store_true")
     ap.add_argument("--lufs", type=float, default=-14.0)
     ap.add_argument("--tp", type=float, default=-1.0)
     ap.add_argument("--no-normalize", action="store_true")
@@ -244,7 +250,28 @@ def build(a, D, sfx):
         else:
             chains.append("%samix=inputs=%d:normalize=0:duration=longest[vobus]" % ("".join("[%s]" % l for l in vo_labels), len(vo_labels)))
             vo_bus = "vobus"
+    # speech regions -> one gain envelope, shared by the music duck and (with --duck-sfx) the SFX duck
+    live_sfx = [(p, t, g) for p, t, g in sfx if t < D]
+    regs, env, env_wav, tmpdir = [], None, None, None
+    if a.duck and vo_bus and (a.music or (a.duck_sfx and live_sfx)):
+        for spec in a.vo:
+            vp, vt = split_at(spec)
+            regs += [(s0 + vt, e0 + vt) for s0, e0 in speech_regions(need(vp))]
+        regs = merge_regions([(s0, min(e0, D)) for s0, e0 in regs if s0 < D])
+        if not regs:
+            print("warn: --duck found no speech in the VO clips; nothing ducked", file=sys.stderr)
+    if regs:
+        env = duck_envelope(regs, D, a.duck_attack, a.duck_release)
+        tmpdir = tempfile.mkdtemp(prefix="mixduck-")
+        env_wav = os.path.join(tmpdir, "gain.wav")
+        write_gain_wav(env_wav, env, a.duck_db)
+
+    def env_input(label):
+        ei = add_input(env_wav)
+        chains.append("[%d:a]aformat=sample_rates=48000:channel_layouts=stereo:sample_fmts=fltp[%s]" % (ei, label))
+
     duck = None
+    stems = {}                        # stem name -> the bus label that feeds the final mix
     if a.music:
         p, t = split_at(a.music)
         mus_path = need(p)
@@ -255,40 +282,38 @@ def build(a, D, sfx):
                 f += ",adelay=%d:all=1" % round(t * 1000)
             return f + ",volume=%sdB[%s]" % (a.music_gain, label)
         i = add_input(mus_path, a.loop_music)
-        if a.duck and vo_bus:
-            regs = []
-            for spec in a.vo:
-                vp, vt = split_at(spec)
-                regs += [(s0 + vt, e0 + vt) for s0, e0 in speech_regions(need(vp))]
-            regs = merge_regions([(s0, min(e0, D)) for s0, e0 in regs if s0 < D])
-            if not regs:
-                print("warn: --duck found no speech in the VO clips; music not ducked", file=sys.stderr)
-        else:
-            regs = []
         if regs:
-            env = duck_envelope(regs, D, a.duck_attack, a.duck_release)
-            tmpdir = tempfile.mkdtemp(prefix="mixduck-")
-            env_wav = os.path.join(tmpdir, "gain.wav")
-            write_gain_wav(env_wav, env, a.duck_db)
             duck = {"regs": regs, "env": env, "wav": env_wav, "tmp": tmpdir, "chain": music_chain, "music": mus_path, "loop": a.loop_music}
             chains.append(music_chain(i, "mus0"))
-            ei = add_input(env_wav)
-            chains.append("[%d:a]aformat=sample_rates=48000:channel_layouts=stereo:sample_fmts=fltp[env]" % ei)
+            env_input("env")
             chains.append("[mus0][env]amultiply[musd]")
-            mix_labels.append("musd")
+            stems["music"] = "musd"
         else:
             chains.append(music_chain(i, "mus"))
-            mix_labels.append("mus")
+            stems["music"] = "mus"
     if vo_bus:
-        mix_labels.append(vo_bus)
-    for k, (p, t, g) in enumerate(sfx):
-        if t >= D:
-            continue
-        src(add_input(p), t, g, "sfx%d" % k)
-        mix_labels.append("sfx%d" % k)
+        stems["vo"] = vo_bus
+    if live_sfx:
+        sfx_labels = []
+        for k, (p, t, g) in enumerate(live_sfx):
+            src(add_input(p), t, g, "sfx%d" % k)
+            sfx_labels.append("sfx%d" % k)
+        if len(sfx_labels) > 1 or (regs and a.duck_sfx):
+            chains.append("%samix=inputs=%d:normalize=0:duration=longest:dropout_transition=0[sfxbus]" % ("".join("[%s]" % l for l in sfx_labels), len(sfx_labels)))
+            stems["sfx"] = "sfxbus"
+        else:
+            stems["sfx"] = sfx_labels[0]
+        if regs and a.duck_sfx:
+            env_input("envs")
+            chains.append("[sfxbus][envs]amultiply[sfxd]")
+            stems["sfx"] = "sfxd"
+    elif a.duck_sfx:
+        print("warn: --duck-sfx with no SFX; ignored", file=sys.stderr)
+    mix_labels = list(stems.values())
     if not mix_labels:
         die("nothing to mix: give --vo, --music, --sfx or --events", 2)
 
+    core = list(chains)
     if len(mix_labels) > 1:
         chains.append("%samix=inputs=%d:normalize=0:duration=longest:dropout_transition=0[pre0]" % ("".join("[%s]" % l for l in mix_labels), len(mix_labels)))
     else:
@@ -299,6 +324,10 @@ def build(a, D, sfx):
     def ff(graph_tail, out_args):
         return ["ffmpeg", "-y", "-hide_banner", "-nostats"] + inputs + ["-filter_complex", pre + ";" + graph_tail] + out_args
 
+    def cleanup():
+        if tmpdir:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     final = "aresample=48000,aformat=sample_fmts=s16:channel_layouts=stereo:sample_rates=48000"
     if a.no_normalize:
@@ -306,6 +335,7 @@ def build(a, D, sfx):
     else:
         m1 = run(ff("[pre]loudnorm=I=%s:TP=%s:LRA=11:print_format=json[o]" % (a.lufs, a.tp), ["-map", "[o]", "-f", "null", "-"]))
         if m1.returncode:
+            cleanup()
             die("ffmpeg (measure pass) failed:\n" + m1.stderr[-1200:])
         js = re.search(r"\{[^{}]*\"input_i\"[^{}]*\}", m1.stderr, re.S)
         meas = json.loads(js.group(0)) if js else None
@@ -313,23 +343,61 @@ def build(a, D, sfx):
             print("warn: mix is (near) silent - skipping loudness normalisation", file=sys.stderr)
             tail = "[pre]%s[out]" % final
         else:
-            ln = "loudnorm=I=%s:TP=%s:LRA=11:measured_I=%s:measured_TP=%s:measured_LRA=%s:measured_thresh=%s:offset=%s:linear=true" % (
+            ln = "loudnorm=I=%s:TP=%s:LRA=11:measured_I=%s:measured_TP=%s:measured_LRA=%s:measured_thresh=%s:offset=%s:linear=true:print_format=json" % (
                 a.lufs, a.tp, meas["input_i"], meas["input_tp"], meas["input_lra"], meas["input_thresh"], meas["target_offset"])
             tail = "[pre]%s,%s[out]" % (ln, final)
         r = run(ff(tail, ["-map", "[out]", "-c:a", "pcm_s16le", a.out]))
     if r.returncode:
-        if duck:
-            shutil.rmtree(duck["tmp"], ignore_errors=True)
+        cleanup()
         die("ffmpeg failed:\n" + r.stderr[-1500:])
+    if re.search(r'"normalization_type"\s*:\s*"dynamic"', r.stderr):
+        print("warn: loudnorm could not reach %s LUFS with one linear gain under %s dBTP, so it compressed the mix (dynamic mode):"
+              " its loudest peaks (usually an SFX hit) come out squashed. For a linear result lower the loudest layer; hear.py fits for it either way."
+              % (a.lufs, a.tp), file=sys.stderr)
+    stem_log =None if a.no_stems else write_stems(a, D, inputs, core, stems, live_sfx)
     duck_log = measure_duck(a, duck, D) if duck else None
+    cleanup()
     v = run(["ffmpeg", "-hide_banner", "-nostats", "-i", a.out, "-af", "ebur128=peak=true", "-f", "null", "-"])
     mi = re.findall(r"I:\s+(-?[\d.]+) LUFS", v.stderr)
     mp = re.findall(r"Peak:\s+(-?[\d.]+) dBFS", v.stderr)
     d = run(["ffprobe", "-v", "error", "-show_entries", "stream=sample_rate,channels:format=duration", "-of", "default=nw=1", a.out]).stdout.split()
-    print("%s  %s  integrated=%s LUFS  true-peak=%s dBFS  (%d inputs, %d sfx)" % (a.out, " ".join(d), mi[-1] if mi else "?", mp[-1] if mp else "?", sum(1 for x in inputs if x == "-i") - (1 if duck else 0), len(sfx)))
+    n_env = (1 if duck else 0) + (1 if regs and a.duck_sfx and live_sfx else 0)
+    print("%s  %s  integrated=%s LUFS  true-peak=%s dBFS  (%d inputs, %d sfx)" % (a.out, " ".join(d), mi[-1] if mi else "?", mp[-1] if mp else "?", sum(1 for x in inputs if x == "-i") - n_env, len(sfx)))
     if duck_log:
         print(duck_log)
+    if stem_log:
+        print(stem_log)
 
+
+def write_stems(a, D, inputs, core, stems, live_sfx):
+    """Render each bus alone (same gains and ducks as the mix, before loudness normalisation) to <out>.stems/, plus manifest.json for hear.py."""
+    sd = os.path.splitext(os.path.abspath(a.out))[0] + ".stems"
+    os.makedirs(sd, exist_ok=True)
+    written = []
+    for name, label in stems.items():
+        graph = core + ["[%s]anullsink" % other for n2, other in stems.items() if n2 != name]
+        graph.append("[%s]apad=whole_dur=%.3f,atrim=0:%.3f,asetpts=PTS-STARTPTS[stem]" % (label, D, D))
+        out = os.path.join(sd, name + ".wav")
+        r = run(["ffmpeg", "-y", "-hide_banner", "-nostats"] + inputs + ["-filter_complex", ";".join(graph), "-map", "[stem]", "-c:a", "pcm_f32le", out])
+        if r.returncode:
+            print("warn: stem %s failed: %s" % (name, r.stderr[-400:]), file=sys.stderr)
+            continue
+        written.append(name)
+    mus = split_at(a.music) if a.music else None
+    man = {
+        "duration": D,
+        "note": "buses before loudness normalisation; levels between stems are comparable, absolute levels are not the delivered ones",
+        "stems": {n: n + ".wav" for n in written},
+        "vo": [{"clip": os.path.abspath(p), "t": t} for p, t in map(split_at, a.vo)],
+        "vo_gain": a.vo_gain,
+        "music": {"clip": os.path.abspath(mus[0]), "t": mus[1], "gain": a.music_gain} if mus else None,
+        "duck_db": a.duck_db if a.duck else None,
+        "duck_sfx": bool(a.duck and a.duck_sfx),
+        "sfx": [{"clip": os.path.abspath(p), "t": t, "gain": g} for p, t, g in live_sfx],
+    }
+    with open(os.path.join(sd, "manifest.json"), "w") as f:
+        json.dump(man, f, indent=1)
+    return "stems: %s -> %s (for hear.py)" % (", ".join(written) or "none", sd)
 
 if __name__ == "__main__":
     main()

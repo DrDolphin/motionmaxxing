@@ -43,7 +43,8 @@ fi
 NODEV="$(node -v 2>/dev/null)"
 PYV="$(python3 -V 2>&1 | awk '{print $2}')"
 pymod() { python3 -c "import $1;print(getattr($1,'__version__','ok'))" 2>/dev/null; }
-NUMPY="$(pymod numpy)"; PIL="$(pymod PIL)"
+NUMPY="$(pymod numpy)"; PIL="$(pymod PIL)"; WHISPER="$(pymod faster_whisper)"
+[ -z "$WHISPER" ] && echo "NOTE: faster-whisper is missing: hear.py (gate G6) will grade masking only. pip install faster-whisper numpy" >&2
 
 # --- hyperframes
 HF=""; HFHOW=""
@@ -102,7 +103,7 @@ cat <<EOF
   "ffprobe": $(str "$FFPROBE"),
   "node": $(str "$NODEV"),
   "python3": $(str "$PYV"),
-  "python_modules": { "numpy": $(str "$NUMPY"), "PIL": $(str "$PIL") },
+  "python_modules": { "numpy": $(str "$NUMPY"), "PIL": $(str "$PIL"), "faster_whisper": $(str "$WHISPER") },
   "hyperframes": { "available": $(bool "$([ -n "$HF" ] && echo 1)"), "version": $(str "$HF"), "how": $(str "$HFHOW") },
   "elevenlabs": {
     "key": $(bool "$EL"), "source": $(str "$ELSRC"),
