@@ -81,14 +81,30 @@ Use 2.5-3 words per second for content lines as the working default and 1.2-1.7 
 Example script format (generic, 15 s):
 
 ```
-Say it once. Watch it done.
+[confident, measured] Say it once. Watch it done.
 (hook: 6 words, 2.4 s at 2.5 w/s)
-No steps in between. Just the result.
+No steps in between... just the result.
 (proof 1: 7 words)
 (silent: typing and click under music)
-Meet <name>. Start now.
+[warm, unhurried] Meet <name>. Start now.
 (cta: 4 words, slower, 1.4 w/s)
 ```
+
+Lines in parentheses are storyboard notes, not script text; keep them out of `script.txt`.
+
+### 3a. Audio tags and delivery (`eleven_v4_turbo`, `eleven_v4`, `eleven_v3`)
+
+The default VO model is `eleven_v4_turbo` (`voice.py vo --model eleven_v4` for the highest-quality model, about twice the price). Both support audio tags; older models (`eleven_multilingual_v2`, Flash) do not and may read tags aloud.
+
+**WHEN** a line needs a particular delivery **DO** put a tag in square brackets before the words it affects, e.g. `[whispering, playful] Say it once.` **because** the tag steers the read and an emotion carries forward until the next tag replaces it. Combine cues with commas; use at most one tag per clause and add a new one only where the emotion should change.
+
+**WHEN** a tag does not land **DO** describe the voice or the situation instead of a sound (`[low, gravelly voice]`, `[out of breath after running up the stairs]`) or try a neighbouring tag and regenerate **because** a tag that reads like a sound cue can trigger an actual sound effect, and a delivery the voice was not trained on is less reliable. Pick the voice for the delivery first (`voice.py voices`).
+
+**WHEN** shaping pace **DO** use punctuation (ellipses for weight and pause, a dash for a break, capitals for one stressed word) and the `--speed` flag (0.7-1.2, default 1.0) **because** SSML `<break>` is not supported on v4 and phoneme tags only work on `eleven_flash_v2`. For a hard-to-say name wrap IPA in forward slashes (`/ˌbaɪoʊˈkemɪstri/`) and test it with the chosen voice.
+
+`voice.py` sends the tags to the API but removes them from `vo.words.json` and `vo.lines.json`, so they never become sync points. Do not use parentheses or braces for directions; those may be read aloud.
+
+**WHEN** budgeting a take **DO** remember every generation is billed per character (about $0.04 per 1K characters on `eleven_v4_turbo`, $0.08 on `eleven_v4`, per ElevenLabs' API pricing page) and re-takes are billed again **because** a whole-script regeneration for one bad line adds up; draft with `vo-local` or a short script, then generate the final once.
 
 ---
 
@@ -161,6 +177,8 @@ Hold rule: after the last element resolves keep 0.6-1.4 s (gate G3), then end. I
 
 **WHEN** generating music **DO** pass the tempo, the length in milliseconds (plus an optional `--plan plan.json`) to `voice.py music --prompt ... --ms N --out audio/music.mp3` (use `--dry-run` first: it prints the request and spends nothing; read the audible-span line it prints afterwards and run `music-fit` when it warns, section 4a) and leave out `--vocals` unless the film is a sting **because** a vocal fights VO and the corpus uses vocal only in one hybrid piece (M914, 1.0-2.4 s).
 
+**WHEN** writing the music prompt **DO** name genre, instrumentation, mood, tempo and the arc in plain words (`minimal pulsing electronic, 120 BPM, soft synth bass, sparse, builds at the midpoint, resolves on the last bar`) **because** the model (`music_v2_5`) follows concrete musical description better than adjectives alone. Use `--plan` for section-level control. The clip can come back with a second or so of trailing silence; run `music-fit --loop-bars` as above.
+
 **WHEN** a voice-led film also has music **DO** keep the music's cuts and the VO's words as separate grids that meet only at the payoff (the brand slam, the click) *(practice, not from the corpus)*.
 
 **WHEN** the final beat is a lingering mark **DO** let the music resolve on the last grid unit before the end and keep SFX off the lingering part except a tail (M946's 3.66 s hold is a measured outlier, M920 1.0 s; your hold stays <= 1.4 s) *(practice, not from the corpus)*.
@@ -207,6 +225,8 @@ All entries below are **practice, not from the corpus**; the corpus fixes the *p
 | Lingering mark (M946, M920) | nothing, or a soft shimmer | tail only | -18 dB or lower |
 
 Choose 3-5 SFX kinds per film and reuse them **because** a film with fifteen distinct sounds sounds like a library demo; one click, one whoosh, one hit, one tick family is a system (same logic as the single accent).
+
+**WHEN** writing an SFX prompt **DO** describe the material, the action, the perspective and the decay (`a single dry mouse click, close, no reverb, very short`; `airy whoosh, fast pass left to right, soft tail`) **because** the generator needs the physical source and the space, not the film's meaning; add `--seconds` to match the event length.
 
 **WHEN** generating SFX **DO** use `voice.py sfx --prompt "<sound>" --seconds 0.4 --out audio/sfx/<id>.mp3`, or `--batch sfx.json --out audio/sfx` for a list (`[{"id","prompt","seconds"}]`, existing files are skipped; each is peak-normalised to -3 dBFS, section 4a); name each file by the event it serves **because** the mix script and any later retiming must find the right sound for the right frame.
 
