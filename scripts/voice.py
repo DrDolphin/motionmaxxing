@@ -4,7 +4,7 @@
 Usage:
   python3 voice.py voices
   python3 voice.py vo --text "..." | --script script.txt --out audio/vo.mp3
-        [--voice ID|name] [--model eleven_multilingual_v2] [--stability .5] [--similarity .75]
+        [--voice ID|name] [--model eleven_v4_turbo] [--stability .5] [--similarity .75]
         [--style 0] [--speed 1.0] [--force]
       -> out.mp3 (or .wav), <stem>.words.json  [{"word","start","end"}]  and  <stem>.lines.json [{"text","start","end"}]
          (lines = script line breaks; a one-line script is split into sentences)
@@ -176,9 +176,14 @@ def cmd_voices(a):
 # ---------------------------------------------------------------- timings
 def words_from_alignment(text, al):
     ch, st, en = al["characters"], al["character_start_times_seconds"], al["character_end_times_seconds"]
-    words, cur = [], None
+    words, cur, in_tag = [], None, False
     for i, c in enumerate(ch):
-        if c.isspace():
+        # [audio tags] are directions to the model, not spoken words: keep them out of the timings
+        if c == "[":
+            in_tag = True
+        if in_tag or c.isspace():
+            if c == "]":
+                in_tag = False
             if cur:
                 words.append(cur)
                 cur = None
@@ -211,7 +216,7 @@ def lines_from_words(text, words):
     for i0, i1 in split_spans(text):
         ws = [w for w in words if w["_i0"] >= i0 and w["_i1"] < i1 + 1 and w["_i1"] >= i0]
         if ws:
-            out.append({"text": text[i0:i1].strip(), "start": ws[0]["start"], "end": ws[-1]["end"]})
+            out.append({"text": re.sub(r"\s*\[[^\]]*\]\s*", " ", text[i0:i1]).strip(), "start": ws[0]["start"], "end": ws[-1]["end"]})
     return out
 
 
@@ -677,7 +682,7 @@ def cmd_music_fit(a):
 
 
 def cmd_music(a):
-    body = {"model_id": "music_v1"}
+    body = {"model_id": "music_v2_5"}
     plan_ms = None
     if a.plan:
         body["composition_plan"] = json.load(open(a.plan))
@@ -838,7 +843,7 @@ def main():
         p = sp.add_parser(n)
         p.add_argument("--text"); p.add_argument("--script"); p.add_argument("--out", required=True); p.add_argument("--voice")
         if n == "vo":
-            p.add_argument("--model", default="eleven_multilingual_v2")
+            p.add_argument("--model", default="eleven_v4_turbo")
             p.add_argument("--stability", type=float, default=0.5); p.add_argument("--similarity", type=float, default=0.75)
             p.add_argument("--style", type=float, default=0.0); p.add_argument("--speed", type=float, default=1.0)
             p.add_argument("--force", action="store_true"); p.add_argument("--no-refine", action="store_true")

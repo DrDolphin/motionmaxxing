@@ -244,7 +244,7 @@ Every script prints `--help`. Zero dependencies unless noted. Full flags in [`re
 | `scripts/fetch_logo.mjs` | Fetches an official mark from SVGL, Simple Icons, or the site, and never redraws one |
 | `scripts/precedent.py` | Rule-only precedent per beat from `library/moments.jsonl` (716 rows) |
 | `scripts/imagegen.py` | Generated surface plates, with a guard that refuses text, logos, UI and people |
-| `scripts/voice.py` | ElevenLabs voice-over, sound effects, music, music fitting, and word alignment |
+| `scripts/voice.py` | ElevenLabs voice-over (`eleven_v4_turbo`, with audio tags), sound effects, music (`music_v2_5`), music fitting, and word alignment |
 | `scripts/sync.mjs` | Word timings to frames, for cutting picture to the voice |
 | `scripts/mix.py` | Voice, music and hits to one -14 LUFS / -1 dBTP mix, with predictable ducking |
 | `scripts/render.mjs` | Deterministic frame-by-frame render through Chrome and ffmpeg; stills, shutter blur, grain |
