@@ -27,7 +27,10 @@ export function findChrome() {
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     '/Applications/Chromium.app/Contents/MacOS/Chromium',
     '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-    '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'];
+    '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
+    // Windows: the machine-wide 64- and 32-bit installs, then the per-user one
+    ...[process.env.ProgramFiles, process.env['ProgramFiles(x86)'], process.env.LOCALAPPDATA]
+      .filter(Boolean).map((d) => path.join(d, 'Google', 'Chrome', 'Application', 'chrome.exe'))];
   const p = c.find((x) => x && fs.existsSync(x));
   if (!p) die('Google Chrome not found (set CHROME_PATH)');
   return p;
