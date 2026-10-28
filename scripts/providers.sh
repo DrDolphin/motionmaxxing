@@ -19,12 +19,15 @@ esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\n\r'; }
 str() { if [ -n "$1" ]; then printf '"%s"' "$(esc "$1")"; else printf 'null'; fi; }
 bool() { if [ "$1" = 1 ]; then printf true; else printf false; fi; }
 
-# --- chrome
-CHROME=""
+# --- chrome (the Windows paths are for Git Bash: the machine-wide 64- and 32-bit installs, then the per-user one)
+CHROME=""; PF86="$(printenv 'ProgramFiles(x86)' 2>/dev/null)"   # bash cannot expand a name with parentheses
 for p in "${CHROME_PATH:-}" "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
          "/Applications/Chromium.app/Contents/MacOS/Chromium" \
          "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary" \
-         "$(command -v google-chrome 2>/dev/null)" "$(command -v chromium 2>/dev/null)"; do
+         "$(command -v google-chrome 2>/dev/null)" "$(command -v chromium 2>/dev/null)" \
+         "${PROGRAMFILES:+$PROGRAMFILES/Google/Chrome/Application/chrome.exe}" \
+         "${PF86:+$PF86/Google/Chrome/Application/chrome.exe}" \
+         "${LOCALAPPDATA:+$LOCALAPPDATA/Google/Chrome/Application/chrome.exe}"; do
   [ -n "$p" ] && [ -x "$p" ] && { CHROME="$p"; break; }
 done
 
