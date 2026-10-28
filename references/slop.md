@@ -6,11 +6,11 @@ Slop is not a style. It is what comes out when no decision was made. This file i
 
 - **Part 0 runs on your PLAN**, before you build: the twelve default reaches and the house style, as questions you ask of your own choices.
 - **Part 1 is a lookup** of what an AI does by default against what a working motion designer decides instead, grouped by topic, plus **Part 1b**, the conditions under which each "tell" is actually right.
-- **Part 2 runs on your RENDER**: an honest way of seeing, six gates (G0-G5) computed by scripts where possible, and a checklist. **Part 3** ranks the six fixes that matter most.
+- **Part 2 runs on your RENDER**: an honest way of seeing, seven gates (G0-G6) computed by scripts where possible, and a checklist. **Part 3** ranks the six fixes that matter most.
 
 Times are at 30 fps with seconds in brackets; sizes are % of frame height H or width W; evidence is cited as moment IDs (M913...) or as N1-N25, the ranked page/template patterns of Part 1.
 
-How to run it: build a draft, run the scripts (`render.mjs` writes `<out>.mp4.events.json`; `look.py` uses it for exact cut frames and prints G0, G2, G3, the audio audit and the motion note; `lint.mjs` computes G5), look at the sheet, work Part 2 top to bottom marking each item PASS / FAIL / JUSTIFIED (a justified fail names the film-level decision that allows it; gates are never justified), fix the three highest-impact FAILs in Part 3 order, re-render and re-check once more. Two passes is the budget; do not polish past that. Never certify your own film as good: the NOTE.md says what you looked at and quotes the numbers.
+How to run it: build a draft, run the scripts (`render.mjs` writes `<out>.mp4.events.json`; `look.py` uses it for exact cut frames and prints G0, G2, G3, the audio audit and the motion note; `lint.mjs` computes G5; `hear.py` computes G6 on the final film with VO), look at the sheet, work Part 2 top to bottom marking each item PASS / FAIL / JUSTIFIED (a justified fail names the film-level decision that allows it; gates are never justified), fix the three highest-impact FAILs in Part 3 order, re-render and re-check once more. Two passes is the budget; do not polish past that. Never certify your own film as good: the NOTE.md says what you looked at and quotes the numbers.
 
 ---
 
@@ -284,9 +284,9 @@ A self-ticked checklist is exactly what once certified a black film, so Part 2 s
 5. **Fix in this order:** anything untrue or broken; the idea and what the viewer must understand; the connections between beats; hierarchy and scale; timing; surface and finish; sound polish. Do not tune easing curves while the idea is unclear.
 6. **Never certify your own film as good.** NOTE.md lists what you checked and quotes the script numbers; it does not say "verified".
 
-### 0. Gates G0-G5 (run first; each is a pass/fail, a FAIL is fixed, never JUSTIFIED away)
+### 0. Gates G0-G6 (run first; each is a pass/fail, a FAIL is fixed, never JUSTIFIED away)
 
-Each gate names what computes it: `look.py` prints G0, G2 and G3 in its GATES block (also `look/gates.json`; `--strict` exits 3 on any FAIL); `lint.mjs` prints G5; G1 and G4 have no script, so judge them on the sheet and stills and say so in NOTE.md; never estimate a number. Same table in SKILL.md and `tools.md` (flags there).
+Each gate names what computes it: `look.py` prints G0, G2 and G3 in its GATES block (also `look/gates.json`; `--strict` exits 3 on any FAIL); `lint.mjs` prints G5; `hear.py` prints G6 (films with VO; it needs `mix.py`'s stems); G1 and G4 have no script, so judge them on the sheet and stills and say so in NOTE.md; never estimate a number. Same table in SKILL.md and `tools.md` (flags there).
 
 | Gate | Pass when | Computed by | Where to look / fix |
 |---|---|---|---|
@@ -296,6 +296,7 @@ Each gate names what computes it: `look.py` prints G0, G2 and G3 in its GATES bl
 | **G3** End card short | End hold (the picture unchanged at the end, lockup landed -> last frame) <= 1.4 s, i.e. a resolved hold of 0.6-1.4 s (under 0.6 s is a NOTE: it ends mid-motion, fine when intended); CTA beat <= 25 % of the film | `look.py` (G3 line: end hold against `--hold-warn 1.4`; final shot = last cut to end, as the CTA share) | Cut the hold; if the film is too short add a proof beat, never logo time. A slow contraction does not make a long hold acceptable |
 | **G4** One hero per frame | Two panels in one frame only if one is >= 2x the other's area or the camera moves between them; otherwise one object per frame | By eye on the sheet (count the panels in every proof frame and compare areas); no script computes it | Cut or move the camera between the objects; shrink the second to a supporting texture |
 | **G5** No page chrome | No corner or edge labels (C1), tracked-caps labels (C2), "0N /" counters (C3), timecodes/metadata (C4), header/footer bars (C6), kicker above a headline (C7), left-aligned headline block at x < 0.2 with right-side media (D1), progress bars (P1), letter-typed headlines (T1), vibe-coded UI cards (V1-V5); C5, V3 and V4 are warnings (layout.md section 0) | `lint.mjs <index.html>` (`GATE G5: FAIL` = exit 1; text inside UI surfaces is exempt from the chrome rules) | The report lists each hit with time and selector. Delete the element; never "justify" it. Also check the outer 12% band of every sheet frame by eye: the lint cannot see text baked into images or canvas |
+| **G6** Voice is heard | Every VO line is at least 0 dB over music + SFX in the speech band across the line, no 300 ms has the bed 10 dB over the voice, and the ASR hears the delivered film as well as the dry line clip; the stems fit the film (R2 >= 0.88) | `hear.py film/final.mp4` (`GATE G6`, per-line report, `<film>.hear.json`) | The FAIL line names the time and the SFX under it. Fix in the mix (lower or move that SFX, `mix.py --duck-sfx`, deeper `--duck-db`, `--vo-gain`), re-mix, re-render, re-run. A line the ASR misreads dry too is the voice or an unusual word: listen, then regenerate or accept and say so |
 
 Inputs for the rest of this part: (a) `look/sheet.jpg` (16 evenly spaced frames with timecodes; `--frames` for more), (b) `look/mid.jpg` (the frame 2 f before each detected cut, max 12) plus frame 0 and the last frame; for cut-1, cut and cut+1 render stills at the times in `look/cuts.txt` with `render.mjs --still`, (c) `look/still.txt` (stretches of at least `--freeze-min` s, default 0.6 s = 18 f, where the picture does not change), (d) the composition source for grep, (e) the `look.py` motion and audio notes. Thresholds are working tolerances taken from the numbers in the other files (practice where not cited), for 30 fps; scale by fps/30 otherwise.
 
