@@ -95,6 +95,9 @@ function film(cfg) {
   cfg = cfg || {};
   const fps = cfg.fps || 30, duration = cfg.duration || 15, W = cfg.width || 1920, H = cfg.height || 1080;
   const twosClock = cfg.clock === 'twos';
+  // 2D transforms only: GSAP's default force3D 'auto' lifts a tweening element onto its own GPU layer and drops it at rest, and
+  // in a headless render played from frame 0 Chrome kept painting its old copy at the resting spot (README "Seek contract")
+  gsap.config({ force3D: false });
   const tl = gsap.timeline({ paused: true });
   const F = n => n / fps;                                    // frames -> seconds
   const q = f => (twosClock ? Math.round(f / 2) * 2 : f);    // quantise an onset (even frames on a twos film)

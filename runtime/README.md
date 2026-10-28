@@ -17,6 +17,12 @@ author only through `M.*` (or `M.tl` with `fromTo` + `immediateRender:false`); n
 Two tweens must not overlap on the same property of the same element (e.g. `M.drift` scale and `M.press` scale on one node): put one on a parent.
 `kf`, `enter`, `snap` etc. all set the element's first value at time 0, so the page also looks right before any seek.
 
+`Motion.film()` also sets `gsap.config({ force3D: false })`, so transforms stay 2D. GSAP's default, `'auto'`, lifts an element onto its own GPU
+layer while a tween runs and drops it at rest; in a headless render played from frame 0, Chrome kept painting the element's old copy at its resting
+spot (a ghost). A clip started mid-film looked clean and the DOM was right, so `selfTest` and `lint.mjs` can't catch it. `z`, `rotationX`,
+`rotationY` and `transformPerspective` still render in 3D. If one element really needs its own layer, opt it in with `gsap.set(el, { force3D: true })`
+and check a render played from frame 0.
+
 ## Film
 ```js
 const M = Motion.film({ fps: 30, duration: 15, width: 1920, height: 1080, clock: 'smooth' });  // 'twos': even-frame onsets, __seek holds each pose 2 f
